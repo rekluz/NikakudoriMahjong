@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -34,6 +33,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -139,7 +139,6 @@ fun ShisenShoScreen(game: ShisenShoGame, onExit: () -> Unit) {
                 val vStretch = 1.25f
                 val tileHeight = slotHeightDp * vStretch
 
-                // Calculate vertical offset to center the grid within the height
                 val totalGridHeight = slotHeightDp * (game.rows - 1) + tileHeight
                 val verticalOffset = (heightDp - totalGridHeight) / 2f
 
@@ -323,18 +322,44 @@ fun NoMovesDialog(onShuffle: () -> Unit, onNewGame: () -> Unit) {
 @Composable
 fun AboutDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val versionName = remember { try { context.packageManager.getPackageInfo(context.packageName, 0).versionName } catch (e: Exception) { "1.1" } }
+    val uriHandler = LocalUriHandler.current
+    val githubUrl = stringResource(id = R.string.github_url)
+
+    // AUTOMATIC VERSION FETCHING
+    val currentVersion = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+        } catch (e: Exception) {
+            "1.0.0"
+        }
+    }
+
     OverlayContainer {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("ABOUT", color = Color.Yellow, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = stringResource(id = R.string.app_name), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text(text = "Version $versionName", color = Color.Gray, fontSize = 14.sp)
+
+            // This now uses the string format "Version %1$s" and injects currentVersion
+            Text(text = stringResource(id = R.string.version_label, currentVersion), color = Color.Gray, fontSize = 14.sp)
+
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = stringResource(id = R.string.about_description), color = Color.White, textAlign = TextAlign.Center, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 8.dp))
             Spacer(modifier = Modifier.height(12.dp))
             Text(text = stringResource(id = R.string.about_developer), color = Color.Yellow, fontSize = 12.sp)
-            Spacer(modifier = Modifier.height(24.dp))
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Visit GitHub Repo",
+                color = Color(0xFF00BFFF),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clickable { uriHandler.openUri(githubUrl) }
+                    .padding(4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
             DialogButton("Close", onDismiss)
         }
     }
@@ -359,7 +384,7 @@ fun MenuPillButton(label: String, enabled: Boolean = true, onClick: () -> Unit) 
     val textColor = if (!enabled) Color.Gray else Color.White
     val borderColor = if (!enabled) Color(0x22FFFFFF) else Color(0x66FFFFFF)
     Box(modifier = Modifier.fillMaxWidth().height(36.dp).scale(scale).clip(CircleShape).background(bgColor).border(1.dp, borderColor, CircleShape).clickable(interactionSource = interactionSource, indication = null, enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(text = label, color = textColor, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        Text(text = label, color = textColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
