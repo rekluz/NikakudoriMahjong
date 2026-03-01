@@ -25,33 +25,50 @@ enum class GameState {
 }
 
 class ShisenShoGame(initialRows: Int, initialCols: Int, val context: Context) {
-    private val soundPool: SoundPool = SoundPool.Builder().setMaxStreams(5).build()
+    private val soundPool: SoundPool = SoundPool.Builder()
+        .setMaxStreams(5)
+        .build()
+
+    private val clickSoundId = loadSoundResource("tile_click")
+    private val errorSoundId = loadSoundResource("tile_error")
+    private val matchSoundId = loadSoundResource("tile_match")
+    private val victorySoundId = loadSoundResource("tile_tada")
+
+    private fun loadSoundResource(name: String): Int {
+        return try {
+            val resId = context.resources.getIdentifier(name, "raw", context.packageName)
+            if (resId != 0) soundPool.load(context, resId, 1) else 0
+        } catch (e: Exception) { 0 }
+    }
+
     private val prefs: SharedPreferences = context.getSharedPreferences("ShisenShoPrefs", Context.MODE_PRIVATE)
 
     var rows by mutableStateOf(prefs.getInt("grid_rows", initialRows))
     var cols by mutableStateOf(prefs.getInt("grid_cols", initialCols))
     var boardMode by mutableStateOf(prefs.getString("board_mode", "standard") ?: "standard")
-    var boardWidthScale by mutableStateOf(1f)
+    var boardWidthScale by mutableStateOf(if (boardMode == "custom") 0.75f else 1f)
 
     var board by mutableStateOf(List(rows) { List(cols) { Tile(0) } })
+    private var initialBoardState: List<List<Tile>> = emptyList()
+
     var selectedTile by mutableStateOf<Pair<Int, Int>?>(null)
     var gameState by mutableStateOf(GameState.PLAYING)
     var timeSeconds by mutableLongStateOf(0L)
 
-    // HINT LOGIC
+    var shufflesRemaining by mutableIntStateOf(5)
+    val canShuffle: Boolean get() = shufflesRemaining > 0
+
     val hintCooldownSeconds = 30L
     var lastHintTime by mutableLongStateOf(-hintCooldownSeconds)
-    val isHintAvailable: Boolean get() = timeSeconds >= lastHintTime + hintCooldownSeconds
-    val hintSecondsRemaining: Long get() = ((lastHintTime + hintCooldownSeconds) - timeSeconds).coerceAtLeast(0L)
 
-    // SHUFFLE LOGIC (NEW CONSTRAINTS)
-    val shuffleCooldownSeconds = 15L
-    var lastShuffleTime by mutableLongStateOf(-shuffleCooldownSeconds)
-    var shufflesRemaining by mutableIntStateOf(5)
-    val isShuffleAvailable: Boolean get() = shufflesRemaining > 0 && timeSeconds >= lastShuffleTime + shuffleCooldownSeconds
-    val shuffleSecondsRemaining: Long get() = ((lastShuffleTime + shuffleCooldownSeconds) - timeSeconds).coerceAtLeast(0L)
+    val isHintAvailable: Boolean
+        get() = timeSeconds >= lastHintTime + hintCooldownSeconds
+
+    val hintSecondsRemaining: Long
+        get() = ((lastHintTime + hintCooldownSeconds) - timeSeconds).coerceAtLeast(0L)
 
     var lastPath by mutableStateOf<List<Pair<Int, Int>>?>(null)
+    private var pathClearJob: Job? = null
     private val gameScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     var isSoundEnabled by mutableStateOf(prefs.getBoolean("sound_enabled", true))
@@ -76,6 +93,44 @@ class ShisenShoGame(initialRows: Int, initialCols: Int, val context: Context) {
         initializeBoard()
     }
 
+    fun getDifficultyLabel(r: Int = rows, c: Int = cols, mode: String = boardMode): String {
+        return when {
+            mode == "custom" -> "Custom"
+            r <= 5 -> "Easy"
+            r <= 7 -> "Normal"
+            c >= 21 -> "Extreme" // New Extreme check
+            else -> "Hard"
+        }
+    }
+
+    fun updateGridSize(newRows: Int, newCols: Int, mode: String = "standard") {
+        require((newRows * newCols) % 2 == 0) { "Board must be even." }
+        rows = newRows
+        cols = newCols
+        boardMode = mode
+        boardWidthScale = if (mode == "custom") 0.75f else 1f
+        prefs.edit {
+            putInt("grid_rows", newRows)
+            putInt("grid_cols", newCols)
+            putString("board_mode", mode)
+        }
+        initializeBoard()
+    }
+
+    private fun playSound(soundId: Int) {
+        if (isSoundEnabled && soundId > 0) {
+            try {
+                soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+            } catch (e: Exception) { }
+        }
+    }
+
+    fun releaseSounds() {
+        pathClearJob?.cancel()
+        gameScope.cancel()
+        soundPool.release()
+    }
+
     fun initializeBoard() {
         val totalTiles = rows * cols
         val tilesList = mutableListOf<Tile>()
@@ -92,194 +147,272 @@ class ShisenShoGame(initialRows: Int, initialCols: Int, val context: Context) {
         }
 
         tilesList.shuffle()
-        board = List(rows) { r -> List(cols) { c -> tilesList[r * cols + c] } }
+        val newBoard = List(rows) { r -> List(cols) { c -> tilesList[r * cols + c] } }
+        initialBoardState = newBoard.map { it.toList() }
+        board = newBoard
+        resetGameStats()
+    }
+
+    fun retryGame() {
+        board = initialBoardState.map { row -> row.map { it.copy(isSelected = false, isRemoved = false, isHint = false) } }
+        resetGameStats()
+    }
+
+    private fun resetGameStats() {
         selectedTile = null
         timeSeconds = 0
         shufflesRemaining = 5
-        lastShuffleTime = -shuffleCooldownSeconds
+        lastHintTime = -hintCooldownSeconds
         gameState = GameState.PLAYING
-
-        if (findAnyMatch() == null) silentShuffle()
+        lastPath = null
     }
 
-    private fun silentShuffle() {
-        val activeTiles = board.flatten().filter { !it.isRemoved }
-        if (activeTiles.isEmpty()) return
-        val shuffledImages = activeTiles.map { it.imageName }.shuffled()
-        var imageIdx = 0
-        board = board.map { row ->
-            row.map { tile ->
-                if (!tile.isRemoved) tile.copy(imageName = shuffledImages[imageIdx++], isSelected = false, isHint = false) else tile
-            }
-        }
-        if (findAnyMatch() == null) silentShuffle()
-    }
+    fun onTileClick(row: Int, col: Int, view: android.view.View) {
+        if (gameState != GameState.PLAYING) return
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
 
-    fun shuffleBoard() {
-        if (!isShuffleAvailable) return
-        val activeTiles = board.flatten().filter { !it.isRemoved }
-        if (activeTiles.isEmpty()) return
-        val shuffledImages = activeTiles.map { it.imageName }.shuffled()
-        var imageIdx = 0
-        board = board.map { row ->
-            row.map { tile ->
-                if (!tile.isRemoved) tile.copy(imageName = shuffledImages[imageIdx++], isSelected = false, isHint = false) else tile
-            }
-        }
+        val tile = board[row][col]
+        if (tile.isRemoved) return
 
-        shufflesRemaining--
-        lastShuffleTime = timeSeconds
-        selectedTile = null
-        if (findAnyMatch() == null) silentShuffle()
-        gameState = GameState.PLAYING
-    }
-
-    // YOUR ORIGINAL PATHFINDING LOGIC
-    fun findPath(p1: Pair<Int, Int>, p2: Pair<Int, Int>): List<Pair<Int, Int>>? {
-        val r1 = p1.first; val c1 = p1.second
-        val r2 = p2.first; val c2 = p2.second
-
-        // 0 turns (Straight line)
-        checkStraight(r1, c1, r2, c2)?.let { return it }
-
-        // 1 turn (L-shape)
-        checkStraight(r1, c1, r1, c2)?.let { path1 ->
-            if (isRemoved(r1, c2)) {
-                checkStraight(r1, c2, r2, c2)?.let { path2 -> return path1 + path2.drop(1) }
-            }
-        }
-        checkStraight(r1, c1, r2, c1)?.let { path1 ->
-            if (isRemoved(r2, c1)) {
-                checkStraight(r2, c1, r2, c2)?.let { path2 -> return path1 + path2.drop(1) }
-            }
-        }
-
-        // 2 turns (U-shape or Z-shape)
-        // Check horizontal scans
-        for (c in -1..cols) {
-            if (c == c1 || c == c2) continue
-            if (isRemovedOrOutside(r1, c) && isRemovedOrOutside(r2, c)) {
-                val pathA = checkStraight(r1, c1, r1, c)
-                val pathB = checkStraight(r1, c, r2, c)
-                val pathC = checkStraight(r2, c, r2, c2)
-                if (pathA != null && pathB != null && pathC != null) return pathA + pathB.drop(1) + pathC.drop(1)
-            }
-        }
-        // Check vertical scans
-        for (r in -1..rows) {
-            if (r == r1 || r == r2) continue
-            if (isRemovedOrOutside(r, c1) && isRemovedOrOutside(r, c2)) {
-                val pathA = checkStraight(r1, c1, r, c1)
-                val pathB = checkStraight(r, c1, r, c2)
-                val pathC = checkStraight(r, c2, r2, c2)
-                if (pathA != null && pathB != null && pathC != null) return pathA + pathB.drop(1) + pathC.drop(1)
-            }
-        }
-        return null
-    }
-
-    private fun checkStraight(r1: Int, c1: Int, r2: Int, c2: Int): List<Pair<Int, Int>>? {
-        if (r1 != r2 && c1 != c2) return null
-        val path = mutableListOf<Pair<Int, Int>>()
-        if (r1 == r2) {
-            val minC = minOf(c1, c2); val maxC = maxOf(c1, c2)
-            for (c in minC..maxC) {
-                if (c != c1 && c != c2 && !isRemovedOrOutside(r1, c)) return null
-                path.add(r1 to c)
-            }
+        val currentSelection = selectedTile
+        if (currentSelection == null) {
+            playSound(clickSoundId)
+            updateTile(row, col, tile.copy(isSelected = true))
+            selectedTile = row to col
         } else {
-            val minR = minOf(r1, r2); val maxR = maxOf(r1, r2)
-            for (r in minR..maxR) {
-                if (r != r1 && r != r2 && !isRemovedOrOutside(r, c1)) return null
-                path.add(r to c1)
-            }
-        }
-        return if (c1 > c2 || r1 > r2) path.reversed() else path
-    }
+            val (r1, c1) = currentSelection
+            if (r1 == row && c1 == col) {
+                updateTile(row, col, tile.copy(isSelected = false))
+                selectedTile = null
+            } else {
+                val tile1 = board[r1][c1]
+                val connectionPath = if (tile1.imageName == tile.imageName) findConnectionPath(r1, c1, row, col) else null
 
-    private fun isRemoved(r: Int, c: Int): Boolean = r in 0 until rows && c in 0 until cols && board[r][c].isRemoved
-    private fun isRemovedOrOutside(r: Int, c: Int): Boolean = r !in 0 until rows || c !in 0 until cols || board[r][c].isRemoved
+                if (connectionPath != null) {
+                    playSound(matchSoundId)
+                    lastPath = connectionPath
 
-    private fun findAnyMatch(): Pair<Pair<Int, Int>, Pair<Int, Int>>? {
-        val active = mutableListOf<Pair<Int, Int>>()
-        for (r in 0 until rows) for (c in 0 until cols) if (!board[r][c].isRemoved) active.add(r to c)
-        for (i in active.indices) {
-            for (j in i + 1 until active.size) {
-                val p1 = active[i]; val p2 = active[j]
-                if (board[p1.first][p1.second].imageName == board[p2.first][p2.second].imageName) {
-                    if (findPath(p1, p2) != null) return p1 to p2
+                    val nextBoard = board.mapIndexed { r, list ->
+                        list.mapIndexed { c, t ->
+                            when {
+                                (r == r1 && c == c1) || (r == row && c == col) -> t.copy(isRemoved = true, isSelected = false)
+                                t.isHint -> t.copy(isHint = false)
+                                else -> t
+                            }
+                        }
+                    }
+                    board = nextBoard
+                    selectedTile = null
+
+                    if (!checkWinCondition()) {
+                        checkForDeadlock()
+                    }
+
+                    pathClearJob?.cancel()
+                    pathClearJob = gameScope.launch {
+                        delay(400)
+                        lastPath = null
+                    }
+                } else {
+                    playSound(errorSoundId)
+                    val nextBoard = board.mapIndexed { r, list ->
+                        list.mapIndexed { c, t ->
+                            when {
+                                r == r1 && c == c1 -> t.copy(isSelected = false)
+                                r == row && c == col -> t.copy(isSelected = true)
+                                else -> t
+                            }
+                        }
+                    }
+                    board = nextBoard
+                    selectedTile = row to col
                 }
             }
         }
-        return null
+    }
+
+    private fun checkForDeadlock() {
+        val groups = getRemainingTileGroups()
+        var hasMove = false
+
+        outer@for (group in groups.values) {
+            if (group.size < 2) continue
+            for (i in 0 until group.size) {
+                for (j in i + 1 until group.size) {
+                    val (r1, c1) = group[i]
+                    val (r2, c2) = group[j]
+                    if (findConnectionPath(r1, c1, r2, c2) != null) {
+                        hasMove = true
+                        break@outer
+                    }
+                }
+            }
+        }
+        if (!hasMove) gameState = GameState.NO_MOVES
+    }
+
+    fun shuffleBoard() {
+        if (!canShuffle) return
+
+        val remaining = board.flatten()
+            .filter { !it.isRemoved }
+            .map { it.copy(isSelected = false, isHint = false) }
+            .shuffled()
+        var index = 0
+        board = List(rows) { r ->
+            List(cols) { c ->
+                if (!board[r][c].isRemoved && index < remaining.size) {
+                    remaining[index++]
+                } else {
+                    board[r][c]
+                }
+            }
+        }
+        shufflesRemaining--
+        selectedTile = null
+        lastPath = null
+        gameState = GameState.PLAYING
+        checkForDeadlock()
     }
 
     fun showHint() {
         if (!isHintAvailable) return
-        val match = findAnyMatch() ?: return
-        val (p1, p2) = match
-        board = board.mapIndexed { ri, row ->
-            row.mapIndexed { ci, tile ->
-                if ((ri == p1.first && ci == p1.second) || (ri == p2.first && ci == p2.second)) {
-                    tile.copy(isHint = true)
-                } else tile.copy(isHint = false)
-            }
-        }
-        lastHintTime = timeSeconds
-        gameScope.launch {
-            delay(2000)
-            board = board.map { row -> row.map { it.copy(isHint = false) } }
-        }
-    }
+        clearHints()
 
-    fun onTileClick(r: Int, c: Int, view: android.view.View) {
-        if (gameState != GameState.PLAYING || board[r][c].isRemoved) return
-        val prev = selectedTile
-        if (prev == null) {
-            updateTile(r, c, board[r][c].copy(isSelected = true))
-            selectedTile = r to c
-        } else {
-            val (pr, pc) = prev
-            if (pr == r && pc == c) {
-                updateTile(r, c, board[r][c].copy(isSelected = false))
-                selectedTile = null
-            } else if (board[pr][pc].imageName == board[r][c].imageName) {
-                val path = findPath(pr to pc, r to c)
-                if (path != null) {
-                    lastPath = path
-                    updateTile(pr, pc, board[pr][pc].copy(isRemoved = true, isSelected = false))
-                    updateTile(r, c, board[r][c].copy(isRemoved = true, isSelected = false))
-                    selectedTile = null
-                    checkGameState()
-                } else {
-                    updateTile(pr, pc, board[pr][pc].copy(isSelected = false))
-                    updateTile(r, c, board[r][c].copy(isSelected = true))
-                    selectedTile = r to c
+        val groups = getRemainingTileGroups()
+        val validMoves = mutableListOf<Pair<Pair<Int, Int>, Pair<Int, Int>>>()
+
+        for (group in groups.values) {
+            if (group.size < 2) continue
+            for (i in 0 until group.size) {
+                for (j in i + 1 until group.size) {
+                    val p1 = group[i]
+                    val p2 = group[j]
+                    if (findConnectionPath(p1.first, p1.second, p2.first, p2.second) != null) {
+                        validMoves.add(p1 to p2)
+                    }
                 }
-            } else {
-                updateTile(pr, pc, board[pr][pc].copy(isSelected = false))
-                updateTile(r, c, board[r][c].copy(isSelected = true))
-                selectedTile = r to c
             }
         }
-    }
 
-    private fun updateTile(r: Int, c: Int, newTile: Tile) {
-        board = board.mapIndexed { ri, row ->
-            if (ri == r) row.mapIndexed { ci, tile -> if (ci == c) newTile else tile } else row
+        if (validMoves.isNotEmpty()) {
+            val hint = validMoves.random()
+            val nextBoard = board.mapIndexed { r, list ->
+                list.mapIndexed { c, t ->
+                    if ((r == hint.first.first && c == hint.first.second) || (r == hint.second.first && c == hint.second.second)) {
+                        t.copy(isHint = true)
+                    } else t
+                }
+            }
+            board = nextBoard
+            lastHintTime = timeSeconds
         }
     }
 
-    private fun checkGameState() {
-        if (board.flatten().all { it.isRemoved }) gameState = GameState.WON
-        else if (findAnyMatch() == null) gameState = GameState.NO_MOVES
+    private fun getRemainingTileGroups(): Map<String, List<Pair<Int, Int>>> {
+        val groups = mutableMapOf<String, MutableList<Pair<Int, Int>>>()
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val tile = board[r][c]
+                if (!tile.isRemoved) {
+                    groups.getOrPut(tile.imageName) { mutableListOf() }.add(r to c)
+                }
+            }
+        }
+        return groups
     }
 
-    fun formatTime(): String = "%02d:%02d".format(timeSeconds / 60, timeSeconds % 60)
-    fun updateGridSize(r: Int, c: Int, m: String) { rows = r; cols = c; boardMode = m; initializeBoard() }
-    fun getDifficultyLabel(r: Int = rows, c: Int = cols, m: String = boardMode): String = if (r <= 5) "Easy" else if (r <= 7) "Normal" else "Hard"
-    fun releaseSounds() { gameScope.cancel() }
-    fun saveScore(n: String, t: Long) {}
-    fun getTopScores(r: Int, c: Int, m: String): List<Pair<String, String>> = emptyList()
-    fun clearScores(r: Int, c: Int, m: String) {}
+    private fun clearHints() {
+        board = board.map { row -> row.map { it.copy(isHint = false) } }
+    }
+
+    private fun checkWinCondition(): Boolean {
+        if (board.all { row -> row.all { it.isRemoved } }) {
+            playSound(victorySoundId)
+            gameState = GameState.WON
+            return true
+        }
+        return false
+    }
+
+    fun saveScore(name: String, time: Long) {
+        val key = "game_scores_${rows}_${cols}_${boardMode}"
+        val savedString = prefs.getString(key, "") ?: ""
+        val scoreList = if (savedString.isEmpty()) mutableListOf<Pair<String, Long>>()
+        else savedString.split(",").mapNotNull {
+            val parts = it.split(":")
+            if (parts.size == 2) parts[0] to (parts[1].toLongOrNull() ?: 0L) else null
+        }.toMutableList()
+
+        scoreList.add(name.uppercase().take(3) to time)
+        val topTen = scoreList.sortedBy { it.second }.take(10)
+
+        val resultString = topTen.joinToString(",") { "${it.first}:${it.second}" }
+        prefs.edit { putString(key, resultString) }
+    }
+
+    fun getTopScores(r: Int, c: Int, mode: String = boardMode): List<Pair<String, String>> {
+        val key = "game_scores_${r}_${c}_${mode}"
+        val savedString = prefs.getString(key, "") ?: ""
+        return if (savedString.isEmpty()) emptyList()
+        else savedString.split(",")
+            .mapNotNull {
+                val parts = it.split(":")
+                if (parts.size == 2) parts[0] to formatGivenTime(parts[1].toLongOrNull() ?: 0L) else null
+            }
+    }
+
+    fun clearScores(r: Int, c: Int, mode: String = boardMode) {
+        val key = "game_scores_${r}_${c}_${mode}"
+        prefs.edit { remove(key) }
+    }
+
+    private fun updateTile(row: Int, col: Int, newTile: Tile) {
+        val nextBoard = board.toMutableList().apply {
+            this[row] = this[row].toMutableList().apply {
+                this[col] = newTile
+            }
+        }
+        board = nextBoard
+    }
+
+    private fun isWalkable(r: Int, c: Int): Boolean {
+        if (r !in 0 until rows || c !in 0 until cols) return true
+        return board[r][c].isRemoved
+    }
+
+    private fun findConnectionPath(r1: Int, c1: Int, r2: Int, c2: Int): List<Pair<Int, Int>>? {
+        if (isLineEmpty(r1, c1, r2, c2)) return listOf(r1 to c1, r2 to c2)
+        for (r in -1..rows) {
+            if (isWalkable(r, c1) && isWalkable(r, c2)) {
+                if (isLineEmpty(r1, c1, r, c1) && isLineEmpty(r, c1, r, c2) && isLineEmpty(r, c2, r2, c2)) {
+                    return listOf(r1 to c1, r to c1, r to c2, r2 to c2)
+                }
+            }
+        }
+        for (c in -1..cols) {
+            if (isWalkable(r1, c) && isWalkable(r2, c)) {
+                if (isLineEmpty(r1, c1, r1, c) && isLineEmpty(r1, c, r2, c) && isLineEmpty(r2, c, r2, c2)) {
+                    return listOf(r1 to c1, r1 to c, r2 to c, r2 to c2)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun isLineEmpty(r1: Int, c1: Int, r2: Int, c2: Int): Boolean {
+        if (r1 == r2) {
+            val (s, e) = if (c1 < c2) c1 to c2 else c2 to c1
+            for (c in s + 1 until e) if (!isWalkable(r1, c)) return false
+            return true
+        } else if (c1 == c2) {
+            val (s, e) = if (r1 < r2) r1 to r2 else r2 to r1
+            for (r in s + 1 until e) if (!isWalkable(r, c1)) return false
+            return true
+        }
+        return false
+    }
+
+    fun formatTime(): String = formatGivenTime(timeSeconds)
+    private fun formatGivenTime(s: Long): String = "%02d:%02d".format(s / 60, s % 60)
 }

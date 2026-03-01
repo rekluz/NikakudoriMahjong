@@ -16,9 +16,9 @@ android {
         minSdk = 24
         targetSdk = 36
         // Incremented to 2 for the next store release
-        versionCode = 2026022801
+        versionCode = 26030101
         // Updated to 1.1 for user visibility
-        versionName = "2.4.1"
+        versionName = "2.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -54,7 +54,8 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    //noinspection UseTomlInstead
+    implementation("androidx.core:core-splashscreen:1.2.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
