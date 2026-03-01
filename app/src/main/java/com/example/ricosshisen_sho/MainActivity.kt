@@ -11,9 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -120,7 +120,7 @@ fun ShisenShoScreen(game: ShisenShoGame, onExit: () -> Unit) {
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 8.dp)
+                .padding(8.dp)
                 .onGloballyPositioned { containerSize = it.size }
         ) {
             if (containerSize.width > 0) {
@@ -141,7 +141,6 @@ fun ShisenShoScreen(game: ShisenShoGame, onExit: () -> Unit) {
 
                 val totalGridHeight = slotHeightDp * (game.rows - 1) + tileHeight
                 val verticalOffset = (heightDp - totalGridHeight) / 2f
-
                 val boardOffsetX = if (game.boardWidthScale < 1f) (widthDp - scaledWidthDp) / 2f else 0.dp
 
                 Box(modifier = Modifier.fillMaxSize().offset(x = boardOffsetX, y = verticalOffset)) {
@@ -155,7 +154,7 @@ fun ShisenShoScreen(game: ShisenShoGame, onExit: () -> Unit) {
                                 modifier = Modifier
                                     .size(tileWidth, tileHeight)
                                     .offset(x = (slotWidthDp * hOverlap * c), y = (slotHeightDp * r))
-                                    .zIndex(if (isMatching) 101f else r.toFloat() + (c.toFloat() * 0.01f)),
+                                    .zIndex(if (isMatching) 101f else r.OddOrEvenZIndex(c)),
                                 isPaused = isPaused,
                                 isMatching = isMatching,
                                 onClick = {
@@ -168,6 +167,7 @@ fun ShisenShoScreen(game: ShisenShoGame, onExit: () -> Unit) {
                                             matchingTiles = matchingTiles + pair
                                             delay(500)
                                             matchingTiles = matchingTiles - pair
+                                            game.lastPath = null
                                         }
                                     }
                                 }
@@ -202,10 +202,19 @@ fun ShisenShoScreen(game: ShisenShoGame, onExit: () -> Unit) {
         ) {
             TimerPill(game.formatTime())
             MenuPillButton("MENU") { game.gameState = GameState.PAUSED }
+
             val hintAvailable = game.isHintAvailable
             val hintLabel = if (hintAvailable) "HINT" else "HINT (${game.hintSecondsRemaining})"
             MenuPillButton(hintLabel, enabled = hintAvailable) { game.showHint() }
-            MenuPillButton("SHUFFLE") { game.shuffleBoard() }
+
+            val shuffleAvailable = game.isShuffleAvailable
+            val shuffleLabel = when {
+                game.shufflesRemaining <= 0 -> "NO SHUFFLES"
+                !shuffleAvailable -> "SHUFFLE (${game.shuffleSecondsRemaining})"
+                else -> "SHUFFLE (${game.shufflesRemaining})"
+            }
+            MenuPillButton(shuffleLabel, enabled = shuffleAvailable) { game.shuffleBoard() }
+
             MenuPillButton("OPTIONS") { game.gameState = GameState.OPTIONS }
             MenuPillButton("ABOUT") { game.gameState = GameState.ABOUT }
         }
@@ -221,6 +230,8 @@ fun ShisenShoScreen(game: ShisenShoGame, onExit: () -> Unit) {
         else -> {}
     }
 }
+
+private fun Int.OddOrEvenZIndex(c: Int): Float = this.toFloat() + (c.toFloat() * 0.01f)
 
 @Composable
 fun TileView(tile: Tile, modifier: Modifier, isPaused: Boolean, isMatching: Boolean, onClick: () -> Unit) {
@@ -266,12 +277,12 @@ fun ScoreDialog(game: ShisenShoGame) {
                 Text("TIME", Modifier.weight(0.3f), color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
             }
             LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                items(10) { index ->
-                    val score = topScores.getOrNull(index)
+                items(topScores) { score ->
+                    val index = topScores.indexOf(score)
                     Row(modifier = Modifier.fillMaxWidth().background(if (index % 2 == 0) Color.Transparent else Color(0x11FFFFFF)).padding(vertical = 4.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("${index + 1}", Modifier.weight(0.2f), color = if (index < 3) Color.Yellow else Color.White, fontWeight = FontWeight.Bold)
-                        Text(score?.first ?: "---", Modifier.weight(0.5f), color = Color.White, fontSize = 14.sp)
-                        Text(score?.second ?: "--:--", Modifier.weight(0.3f), color = if (score != null) Color.Cyan else Color.DarkGray, textAlign = TextAlign.End, fontWeight = FontWeight.Bold)
+                        Text(score.first, Modifier.weight(0.5f), color = Color.White, fontSize = 14.sp)
+                        Text(score.second, Modifier.weight(0.3f), color = Color.Cyan, textAlign = TextAlign.End, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -324,41 +335,19 @@ fun AboutDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val githubUrl = stringResource(id = R.string.github_url)
-
-    // AUTOMATIC VERSION FETCHING
-    val currentVersion = remember {
-        try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
-        } catch (e: Exception) {
-            "1.0.0"
-        }
-    }
-
+    val currentVersion = remember { try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0" } catch (e: Exception) { "1.0.0" } }
     OverlayContainer {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("ABOUT", color = Color.Yellow, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = stringResource(id = R.string.app_name), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-
-            // This now uses the string format "Version %1$s" and injects currentVersion
             Text(text = stringResource(id = R.string.version_label, currentVersion), color = Color.Gray, fontSize = 14.sp)
-
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = stringResource(id = R.string.about_description), color = Color.White, textAlign = TextAlign.Center, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 8.dp))
             Spacer(modifier = Modifier.height(12.dp))
             Text(text = stringResource(id = R.string.about_developer), color = Color.Yellow, fontSize = 12.sp)
-
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Visit GitHub Repo",
-                color = Color(0xFF00BFFF),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clickable { uriHandler.openUri(githubUrl) }
-                    .padding(4.dp)
-            )
-
+            Text(text = "Visit GitHub Repo", color = Color(0xFF00BFFF), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { uriHandler.openUri(githubUrl) }.padding(4.dp))
             Spacer(modifier = Modifier.height(12.dp))
             DialogButton("Close", onDismiss)
         }
@@ -378,12 +367,9 @@ fun TimerPill(time: String) {
 @Composable
 fun MenuPillButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(targetValue = if (isPressed && enabled) 0.98f else 1f, label = "pillScale")
-    val bgColor = if (!enabled) Color(0x11FFFFFF) else if (isPressed) Color(0x66444444) else Color(0x33FFFFFF)
+    val bgColor = if (!enabled) Color(0x11FFFFFF) else Color(0x33FFFFFF)
     val textColor = if (!enabled) Color.Gray else Color.White
-    val borderColor = if (!enabled) Color(0x22FFFFFF) else Color(0x66FFFFFF)
-    Box(modifier = Modifier.fillMaxWidth().height(36.dp).scale(scale).clip(CircleShape).background(bgColor).border(1.dp, borderColor, CircleShape).clickable(interactionSource = interactionSource, indication = null, enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxWidth().height(36.dp).clip(CircleShape).background(bgColor).border(1.dp, Color(0x66FFFFFF), CircleShape).clickable(interactionSource = interactionSource, indication = null, enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
         Text(text = label, color = textColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
