@@ -16,9 +16,9 @@ android {
         minSdk = 24
         targetSdk = 36
         // Incremented to 2 for the next store release
-        versionCode = 26030101
+        versionCode = 26030102
         // Updated to 1.1 for user visibility
-        versionName = "2.4.2"
+        versionName = "2.4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

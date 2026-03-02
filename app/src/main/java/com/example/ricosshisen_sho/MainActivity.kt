@@ -235,13 +235,20 @@ fun TileView(tile: Tile, modifier: Modifier, isPaused: Boolean, isMatching: Bool
     val context = LocalContext.current
     val tileImageId = remember(tile.imageName) { context.resources.getIdentifier(tile.imageName, "drawable", context.packageName) }
     val backImageId = remember { context.resources.getIdentifier("tile_back", "drawable", context.packageName) }
-    val infiniteTransition = rememberInfiniteTransition(label = "flash")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 1f, targetValue = 0f,
-        animationSpec = infiniteRepeatable(animation = tween(250, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "alpha"
-    )
-    Box(modifier = modifier.alpha(if (isMatching) alpha else 1f).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }) {
+
+    // Optimization: Only run animation state if tile is currently matching
+    val alpha by if (isMatching) {
+        val infiniteTransition = rememberInfiniteTransition(label = "flash")
+        infiniteTransition.animateFloat(
+            initialValue = 1f, targetValue = 0f,
+            animationSpec = infiniteRepeatable(animation = tween(250, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+            label = "alpha"
+        )
+    } else {
+        remember { mutableStateOf(1f) }
+    }
+
+    Box(modifier = modifier.alpha(alpha).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }) {
         val imageId = if (isPaused) backImageId else tileImageId
         if (imageId != 0) {
             Image(painter = painterResource(id = imageId), contentDescription = "Game Tile", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
@@ -257,7 +264,6 @@ fun TileView(tile: Tile, modifier: Modifier, isPaused: Boolean, isMatching: Bool
 fun ScoreDialog(game: ShisenShoGame) {
     var selectedSize by remember { mutableStateOf(game.rows to game.cols to game.boardMode) }
     val topScores = game.getTopScores(selectedSize.first.first, selectedSize.first.second, selectedSize.second)
-    // ADDED EXTREME (8, 21) TO THE SIZES LIST
     val sizes = listOf(Triple(5, 14, "standard"), Triple(7, 16, "standard"), Triple(8, 17, "standard"), Triple(8, 21, "standard"), Triple(8, 17, "custom"))
     OverlayContainer {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -414,7 +420,6 @@ fun OptionsDialog(game: ShisenShoGame, onDone: () -> Unit) {
 
 @Composable
 fun GridSizeToggle(game: ShisenShoGame) {
-    // UPDATED SIZES LIST TO INCLUDE EXTREME (8, 21)
     val sizes = listOf(Triple(5, 14, "standard"), Triple(7, 16, "standard"), Triple(8, 17, "standard"), Triple(8, 21, "standard"), Triple(8, 17, "custom"))
     val currentIndex = sizes.indexOfFirst { it.first == game.rows && it.second == game.cols && it.third == game.boardMode }.coerceAtLeast(0)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
