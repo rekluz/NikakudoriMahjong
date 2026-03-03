@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="app/src/main/res/drawable/splash_icon.png" width="256" height="256" alt="Nikakudori Mahjong Icon">
-</p>
 
-<h1 align="center">Nikakudori Mahjong</h1>
+
+<h1 align="center">Nikakudori Master</h1>
 
 <p align="center">
   <strong>A modern, fast-paced implementation of the classic Japanese Shisen-Sho puzzle.</strong><br>
