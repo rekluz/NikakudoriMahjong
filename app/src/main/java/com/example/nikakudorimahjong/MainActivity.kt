@@ -400,17 +400,17 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
             }
-            packageInfo.versionName ?: "2.4.5"
+            packageInfo.versionName ?: "3.0.1"
         } catch (e: Exception) {
-            "2.4.5" // Fallback if lookup fails
+            "3.0.1" // Fallback if lookup fails
         }
     }
 
     OverlayContainer {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("ABOUT", color = Color.Yellow, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Nikakudori Mahjong", color = Color.Yellow, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Nikakudori Mahjong", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(text = "A tile matching game by Rico", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(text = "Version $versionName", color = Color.Gray, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(16.dp))
             Text(
