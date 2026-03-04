@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A modern, fast-paced implementation of the classic Japanese Shisen-Sho puzzle.</strong><br>
-  Built with Kotlin and Jetpack Compose for a responsive, and fun gameplay experience.
+  Built with Kotlin and Jetpack Compose for a responsive, relaxing and fun gameplay experience.
 </p>
 
 <p align="center">
