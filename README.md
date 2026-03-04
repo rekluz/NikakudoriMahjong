@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" alt="Platform">
   <img src="https://img.shields.io/badge/Language-Kotlin-orange.svg" alt="Language">
   <img src="https://img.shields.io/badge/UI-Jetpack_Compose-blue.svg" alt="UI Framework">
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
+ 
 </p>
 
 ---
@@ -38,9 +38,18 @@
 This game was developed as a personal journey into Android development. As a beginner, I used this project to learn the ropes of **Jetpack Compose** and **Kotlin**. With the help of **AI collaboration**, I was able to bring a childhood favorite to life with modern animations and solid logic.
 
 ---
-<p align="center">
-  Developed with ❤️ by Rico | 2026
-</p>
+---
+
+## ⚖️ License & Copyright
+
+**Copyright © 2026 Rico (Rekluz Games). All Rights Reserved.**
+
+This project and its associated assets (source code, graphics, and design) are the exclusive property of the creator. 
+
+* **Personal Use:** You may view and fork this repository for personal, educational, and non-commercial study only.
+* **Prohibited Use:** No part of this project may be redistributed, modified for public use, or used in commercial products without express written permission.
+* **No Warranty:** This software is provided "as-is," without warranty of any kind.
+ </p>
 <p align="center">
   <img src="graphics/screenshot.png" width="600" alt="Nikakudori Mahjong Gameplay" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
 </p>
