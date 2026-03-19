@@ -1,39 +1,28 @@
 
 
 <h1 align="center">Nikakudori Master</h1>
+⚠️ Project Archived
 
-<p align="center">
-  <strong>A modern, fast-paced implementation of the classic Japanese Shisen-Sho puzzle.</strong><br>
-  Built with Kotlin and Jetpack Compose for a responsive, relaxing and fun gameplay experience.
-</p>
+This repository has been archived and is no longer actively maintained.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" alt="Platform">
-  <img src="https://img.shields.io/badge/Language-Kotlin-orange.svg" alt="Language">
-  <img src="https://img.shields.io/badge/UI-Jetpack_Compose-blue.svg" alt="UI Framework">
- 
-</p>
+A newer and improved version of this project is now available:
 
----
+👉 https://github.com/rekluz/Nikakudori-Mahjong-Redux
 
-### 🎮 Features
+What this means
 
-* **Multiple Board Sizes:** Choose your challenge, from **5x14 (Relaxed)** to **8x21 (Expert)**.
-* **Game Modes:** Supports standard layouts and unique custom **"Hollow"** board shapes.
-* **Smooth Animations:** Staggered "pop-in" tile spawning and particle effects for a satisfying feel.
-* **Sound System:** Integrated sound effects for matches and UI interactions.
-* **Hall of Fame:** Local high-score tracking across all difficulty levels.
-* **Quality of Life:** Infinite Undo, smart Hint system, and automated Shuffling when no moves are left.
+This codebase is preserved for reference and historical purposes
 
-### 🛠 Tech Stack
+No further updates, bug fixes, or features will be added
 
-* **Language:** [Kotlin](https://kotlinlang.org/)
-* **Toolkit:** [Jetpack Compose](https://developer.android.com/jetpack/compose) (Declarative UI)
-* **Architecture:** State-driven game logic using `MutableState` and Coroutines.
-* **API Level:** Android 7.0 (API 24) and above.
+Issues and pull requests are no longer monitored
 
----
+Looking for the latest version?
 
+Please visit the new repository here:
+👉 https://github.com/rekluz/Nikakudori-Mahjong-Redux
+
+Thank you for your interest and support!
 ### 🚀 About the Project
 This game was developed as a personal journey into Android development. As a beginner, I used this project to learn the ropes of **Jetpack Compose** and **Kotlin**. With the help of **AI collaboration**, I was able to bring a childhood favorite to life with modern animations and solid logic.
 
