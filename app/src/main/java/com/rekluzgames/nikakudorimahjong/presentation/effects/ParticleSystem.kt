@@ -234,23 +234,34 @@ fun ParticleOverlay(
             .zIndex(1f)
     ) {
         canvasSize = size
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        val left = centerX - 180f
+        val right = centerX + 180f
+        val top = centerY - 220f
+        val bottom = centerY + 220f
 
         particles.forEach { p ->
-            withTransform({
-                rotate(degrees = p.rotation, pivot = Offset(p.x, p.y))
-            }) {
-                if (p.isFromBurst) {
-                    drawRect(
-                        color = p.color.copy(alpha = p.alpha),
-                        topLeft = Offset(p.x - p.width / 2f, p.y - p.height / 2f),
-                        size = Size(p.width, p.height)
-                    )
-                } else {
-                    drawOval(
-                        color = p.color.copy(alpha = p.alpha),
-                        topLeft = Offset(p.x - p.width / 2f, p.y - p.height / 2f),
-                        size = Size(p.width, p.height)
-                    )
+            val shouldSkip = !p.isFromBurst && isScoreEntryActive &&
+                    p.x in left..right && p.y in top..bottom
+
+            if (!shouldSkip) {
+                withTransform({
+                    rotate(degrees = p.rotation, pivot = Offset(p.x, p.y))
+                }) {
+                    if (p.isFromBurst) {
+                        drawRect(
+                            color = p.color.copy(alpha = p.alpha),
+                            topLeft = Offset(p.x - p.width / 2f, p.y - p.height / 2f),
+                            size = Size(p.width, p.height)
+                        )
+                    } else {
+                        drawOval(
+                            color = p.color.copy(alpha = p.alpha),
+                            topLeft = Offset(p.x - p.width / 2f, p.y - p.height / 2f),
+                            size = Size(p.width, p.height)
+                        )
+                    }
                 }
             }
         }

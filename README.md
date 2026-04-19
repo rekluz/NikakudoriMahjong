@@ -9,19 +9,20 @@ A beautiful and peaceful Japanese tile-matching solitaire game. Clear the board 
 
 ---
 
-## What's New (v5.5.5)
+## What's New (v5.5.8)
 
 - **Redesigned Board Layouts** - Completely reimagined Pyramid, Dragon, and Bridge layouts with more tiles and improved structures
 - **Enhanced Tile Rendering** - Improved visual overlap and spacing for better 3D board aesthetics
 - **New Languages** - Added Traditional Chinese (繁體中文) and Korean (한국어) support
 - **Fixed GitHub Link** - Updated repository URL
+- **New Updated Welcome and About Page screens.
 =======
-## What's New (v5.5.5)
+## What's New (v5.5.8)
 
 Redesigned Board Layouts - Completely reimagined Pyramid, Dragon, and Bridge layouts with more tiles and improved structures
 Enhanced Tile Rendering - Improved visual overlap and spacing for better 3D board aesthetics
 New Languages - Added Traditional Chinese (繁體中文) and Korean (한국어) support
-Fixed GitHub Link - Updated repository URL
+Fixed GitHub Link - Updated repository URL Particle streams enhanced.
 
 
 ## How to Play
