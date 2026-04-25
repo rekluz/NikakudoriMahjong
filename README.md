@@ -48,6 +48,6 @@ Fixed some game board glitches
 
 ## License
 
-*Copyright © 2026 Rekluz Games. All rights reserved.*
+*Copyright © 2026 Rekluz Labs. All rights reserved.*
 *This code and its assets are the exclusive property of Rekluz Games.
 *Personal use only. No commercial use or redistribution permitted.*
